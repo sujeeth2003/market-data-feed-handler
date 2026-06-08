@@ -1,0 +1,5 @@
+build/
+*.exe
+*.pdb
+*.o
+__pycache__/
