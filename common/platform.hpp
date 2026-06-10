@@ -19,3 +19,10 @@
   inline void pin_thread(unsigned) {}
 #endif
 
+inline void cpu_relax() {
+#if defined(__x86_64__) || defined(_M_X64)
+  __builtin_ia32_pause();
+#else
+  std::this_thread::yield();
+#endif
+}
