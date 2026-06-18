@@ -10,3 +10,24 @@
 #include "../common/msg.hpp"
 
 namespace v1 {
+class Queue {
+  std::mutex m_;
+  std::condition_variable cv_;
+  std::deque<Msg> q_;
+
+ public:
+  explicit Queue(unsigned /*producers*/) {}
+  void push(unsigned /*producer*/, const Msg& msg) {
+    { std::lock_guard<std::mutex> g(m_); q_.push_back(msg); }
+    cv_.notify_one();
+  }
+  // Blocks until a message is available (the stop markers guarantee wake-ups).
+  bool pop(Msg& out) {
+    std::unique_lock<std::mutex> g(m_);
+    cv_.wait(g, [&] { return !q_.empty(); });
+    out = q_.front();
+    q_.pop_front();
+    return true;
+  }
+};
+}  // namespace v1
