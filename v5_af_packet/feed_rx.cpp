@@ -20,3 +20,16 @@
 #include "../common/msg.hpp"
 #include "../common/platform.hpp"
 
+#if defined(__linux__)
+#include <arpa/inet.h>
+#include <linux/if_ether.h>
+#include <linux/if_packet.h>
+#include <net/if.h>
+#include <sys/mman.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#include <algorithm>
+#include <atomic>
+#include <thread>
+#include <vector>
+
