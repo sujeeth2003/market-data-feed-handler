@@ -55,3 +55,22 @@ int main(int argc, char** argv) {
   auto* ring = (uint8_t*)mmap(nullptr, ring_bytes, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_LOCKED, fd, 0);
   if (ring == MAP_FAILED) { std::perror("mmap"); return 1; }
 
+  sockaddr_ll ll{};
+  ll.sll_family = AF_PACKET; ll.sll_protocol = htons(ETH_P_IP); ll.sll_ifindex = (int)if_nametoindex(iface);
+  if (!ll.sll_ifindex || bind(fd, (sockaddr*)&ll, sizeof ll) < 0) { std::perror("bind"); return 1; }
+
+  // Demo sender: ordinary UDP socket sending Msg structs to 127.0.0.1:port.
+  std::thread tx([&] {
+    int s = socket(AF_INET, SOCK_DGRAM, 0);
+    sockaddr_in a{};
+    a.sin_family = AF_INET; a.sin_port = htons(port); a.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    uint64_t next = now_ns();
+    for (uint64_t i = 0; i < count; ++i) {
+      while (now_ns() < next) cpu_relax();
+      next += gap;
+      Msg m{now_ns(), i, 0, 0, i};
+      sendto(s, &m, sizeof m, 0, (sockaddr*)&a, sizeof a);
+    }
+    close(s);
+  });
+
