@@ -33,3 +33,25 @@
 #include <thread>
 #include <vector>
 
+int main(int argc, char** argv) {
+  const char* iface = argc > 1 ? argv[1] : "lo";
+  int port = argc > 2 ? std::atoi(argv[2]) : 15000;
+  uint64_t count = argc > 3 ? std::strtoull(argv[3], nullptr, 10) : 200000;
+  uint64_t gap = argc > 4 ? std::strtoull(argv[4], nullptr, 10) : 2000;
+  (void)now_ns();
+
+  int fd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_IP));
+  if (fd < 0) { std::perror("socket(AF_PACKET) - need root / CAP_NET_RAW"); return 1; }
+  int ver = TPACKET_V2;
+  if (setsockopt(fd, SOL_PACKET, PACKET_VERSION, &ver, sizeof ver) < 0) { std::perror("PACKET_VERSION"); return 1; }
+
+  tpacket_req req{};
+  req.tp_block_size = 1u << 22;                       // 4 MiB blocks
+  req.tp_frame_size = 2048;
+  req.tp_block_nr = 8;
+  req.tp_frame_nr = req.tp_block_size / req.tp_frame_size * req.tp_block_nr;
+  if (setsockopt(fd, SOL_PACKET, PACKET_RX_RING, &req, sizeof req) < 0) { std::perror("PACKET_RX_RING"); return 1; }
+  size_t ring_bytes = (size_t)req.tp_block_size * req.tp_block_nr;
+  auto* ring = (uint8_t*)mmap(nullptr, ring_bytes, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_LOCKED, fd, 0);
+  if (ring == MAP_FAILED) { std::perror("mmap"); return 1; }
+
