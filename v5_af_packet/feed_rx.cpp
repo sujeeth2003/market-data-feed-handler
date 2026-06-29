@@ -74,3 +74,39 @@ int main(int argc, char** argv) {
     close(s);
   });
 
+  std::vector<uint32_t> lat;
+  lat.reserve(count);
+  uint64_t expect = 0, dup_or_gap = 0;
+  size_t frame = 0;
+  uint64_t idle_since = now_ns();
+  while (expect < count && now_ns() - idle_since < 5'000'000'000ull) {     // give up after 5 s of silence
+    auto* hdr = (tpacket2_hdr*)(ring + frame * req.tp_frame_size);
+    if (!(__atomic_load_n(&hdr->tp_status, __ATOMIC_ACQUIRE) & TP_STATUS_USER)) { cpu_relax(); continue; }
+    idle_since = now_ns();
+    uint64_t t_rx = now_ns();
+    auto* sll = (sockaddr_ll*)((uint8_t*)hdr + TPACKET_ALIGN(sizeof(tpacket2_hdr)));
+    const uint8_t* pkt = (const uint8_t*)hdr + hdr->tp_mac;   // Ethernet header start
+    const uint8_t* ip = pkt + ETH_HLEN;
+    size_t ihl = (ip[0] & 0x0F) * 4;
+    if (sll->sll_pkttype != PACKET_OUTGOING && ip[9] == IPPROTO_UDP && hdr->tp_snaplen >= ETH_HLEN + ihl + 8 + sizeof(Msg)) {
+      const uint8_t* udp = ip + ihl;
+      if (ntohs(*(const uint16_t*)(udp + 2)) == port) {
+        Msg m;
+        std::memcpy(&m, udp + 8, sizeof m);
+        if (m.seq == expect) { lat.push_back(t_rx > m.t_ns ? (uint32_t)(t_rx - m.t_ns) : 0); ++expect; }
+        else ++dup_or_gap;                                    // loopback duplicate, or a real loss
+      }
+    }
+    __atomic_store_n(&hdr->tp_status, TP_STATUS_KERNEL, __ATOMIC_RELEASE);  // hand the frame back
+    frame = frame + 1 == req.tp_frame_nr ? 0 : frame + 1;
+  }
+  tx.join();
+  if (lat.empty()) { std::puts("no packets received"); return 1; }
+  std::sort(lat.begin(), lat.end());
+  auto at = [&](double f) { return lat[std::min(lat.size() - 1, (size_t)(f * lat.size()))]; };
+  std::printf("received %zu/%llu  skipped(dup/gap)=%llu\n", lat.size(), (unsigned long long)count, (unsigned long long)dup_or_gap);
+  std::printf("send->userspace  p50=%uns p99=%uns p99.9=%uns max=%uns\n", at(.5), at(.99), at(.999), lat.back());
+}
+#else
+int main() { std::puts("v5 is Linux only (AF_PACKET / PACKET_MMAP)."); }
+#endif
