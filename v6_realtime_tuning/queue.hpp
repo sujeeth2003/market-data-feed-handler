@@ -43,3 +43,23 @@ class Ring {
   }
 };
 
+template <size_t N = (1u << 16)>
+class Queue {
+  std::vector<std::unique_ptr<Ring<N>>> rings_;
+  size_t next_ = 0;
+
+ public:
+  explicit Queue(unsigned producers) {
+    for (unsigned i = 0; i < producers; ++i) rings_.push_back(std::make_unique<Ring<N>>());
+    std::printf("v6: huge pages %s\n", rings_[0]->huge() ? "in use" : "NOT available (fell back to 4 KiB pages)");
+  }
+  void push(unsigned producer, const Msg& m) { while (!rings_[producer]->try_push(m)) cpu_relax(); }
+  bool pop(Msg& out) {
+    for (size_t i = 0, n = rings_.size(); i < n; ++i) {
+      size_t r = next_ + i < n ? next_ + i : next_ + i - n;
+      if (rings_[r]->pop(out)) { next_ = r + 1 == n ? 0 : r + 1; return true; }
+    }
+    return false;
+  }
+};
+}  // namespace v6
