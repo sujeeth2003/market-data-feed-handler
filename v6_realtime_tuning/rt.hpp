@@ -16,3 +16,24 @@
   #include <sys/mman.h>
 #endif
 
+namespace rt {
+constexpr size_t kHuge = 2u << 20;
+
+struct Region {
+  void* p = nullptr;
+  size_t bytes = 0;
+  enum Kind { None, Mmap, Heap } kind = None;
+  bool huge = false;   // true only if MAP_HUGETLB succeeded
+
+  Region() = default;
+  Region(const Region&) = delete;
+  Region& operator=(const Region&) = delete;
+  Region(Region&& o) noexcept : p(o.p), bytes(o.bytes), kind(o.kind), huge(o.huge) { o.p = nullptr; o.kind = None; }
+  ~Region() {
+#if defined(__linux__)
+    if (kind == Mmap) munmap(p, bytes);
+#endif
+    if (kind == Heap) ::operator delete(p, std::align_val_t{4096});
+  }
+};
+
