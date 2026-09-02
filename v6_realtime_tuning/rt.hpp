@@ -67,3 +67,12 @@ inline bool lock(Region& r) {
 #endif
 }
 
+inline bool set_fifo(int prio) {
+#if defined(__linux__)
+  sched_param sp{}; sp.sched_priority = prio;
+  return sched_setscheduler(0, SCHED_FIFO, &sp) == 0;
+#else
+  (void)prio; return false;
+#endif
+}
+}  // namespace rt
