@@ -54,3 +54,16 @@ inline Region alloc(size_t bytes) {
   return r;
 }
 
+inline void pretouch(Region& r) {
+  auto* b = static_cast<volatile uint8_t*>(r.p);
+  for (size_t i = 0; i < r.bytes; i += 4096) b[i] = 0;
+}
+
+inline bool lock(Region& r) {
+#if defined(__linux__)
+  return mlock(r.p, r.bytes) == 0;
+#else
+  (void)r; return false;
+#endif
+}
+
