@@ -37,3 +37,20 @@ struct Region {
   }
 };
 
+inline Region alloc(size_t bytes) {
+  Region r;
+  r.bytes = (bytes + kHuge - 1) / kHuge * kHuge;
+#if defined(__linux__)
+  void* m = mmap(nullptr, r.bytes, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGETLB, -1, 0);
+  if (m != MAP_FAILED) { r.p = m; r.kind = Region::Mmap; r.huge = true; return r; }
+  m = mmap(nullptr, r.bytes, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  if (m != MAP_FAILED) {
+    madvise(m, r.bytes, MADV_HUGEPAGE);   // transparent huge pages if enabled
+    r.p = m; r.kind = Region::Mmap; return r;
+  }
+#endif
+  r.p = ::operator new(r.bytes, std::align_val_t{4096});
+  r.kind = Region::Heap;
+  return r;
+}
+
