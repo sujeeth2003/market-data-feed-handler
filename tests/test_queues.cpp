@@ -38,3 +38,13 @@ void check(const char* name, unsigned P, uint64_t per) {
   failures += !ok;
 }
 
+int main() {
+  const uint64_t n = 300000;
+  check<v1::Queue>("v1 mutex+condvar", 3, n);
+  check<v2::Queue<>>("v2 spsc", 1, n);
+  check<v3::Queue<>>("v3 spsc padded", 1, n);
+  check<v4::Queue<>>("v4 ring/producer", 3, n);
+  check<v4::Queue<1024>>("v4 small rings (backpressure)", 3, n);
+  std::puts(failures ? "FAILED" : "all queue tests ok");
+  return failures != 0;
+}
