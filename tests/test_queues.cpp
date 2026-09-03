@@ -12,3 +12,29 @@
 static int failures = 0;
 
 template <class Q>
+void check(const char* name, unsigned P, uint64_t per) {
+  Q q(P);
+  std::vector<std::thread> th;
+  for (unsigned p = 0; p < P; ++p)
+    th.emplace_back([&, p] {
+      for (uint64_t i = 0; i < per; ++i) q.push(p, Msg{0, i, p, 0, i * 3 + p});
+      q.push(p, Msg{0, per, p, 1, 0});
+    });
+  std::vector<uint64_t> next(P, 0);
+  unsigned stopped = 0;
+  uint64_t bad = 0, got = 0;
+  Msg m;
+  while (stopped < P) {
+    if (!q.pop(m)) continue;
+    if (m.kind) { ++stopped; continue; }
+    if (m.seq != next[m.producer] || m.payload != m.seq * 3 + m.producer) ++bad;
+    next[m.producer] = m.seq + 1;
+    ++got;
+  }
+  for (auto& t : th) t.join();
+  bool ok = !bad && got == P * per;
+  std::printf("%-22s producers=%u  received=%llu  bad=%llu  %s\n", name, P, (unsigned long long)got,
+              (unsigned long long)bad, ok ? "ok" : "FAIL");
+  failures += !ok;
+}
+
