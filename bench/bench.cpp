@@ -19,3 +19,35 @@
 #include "../v6_realtime_tuning/queue.hpp"
 #endif
 
+struct Result { uint32_t p50, p99, p999, max; uint64_t received, errors; double mps; };
+
+template <class Q>
+Result run(unsigned P, size_t per, uint64_t gap, bool pin) {
+  Q q(P);
+  std::vector<std::thread> th;
+  for (unsigned p = 0; p < P; ++p) {
+    th.emplace_back([&, p] {
+      if (pin) pin_thread(p + 1);
+      uint64_t next = now_ns();
+      for (uint64_t i = 0; i < per; ++i) {
+        if (gap) { while (now_ns() < next) cpu_relax(); next += gap; }
+        q.push(p, Msg{now_ns(), i, p, 0, i});
+      }
+      q.push(p, Msg{now_ns(), per, p, 1, 0});
+    });
+  }
+  if (pin) pin_thread(0);
+  std::vector<uint64_t> expect(P, 0);
+  std::vector<uint32_t> lat;
+  lat.reserve(P * per);
+  uint64_t errors = 0;
+  unsigned stopped = 0;
+  uint64_t t0 = now_ns();
+  Msg m;
+  while (stopped < P) {
+    if (!q.pop(m)) { cpu_relax(); continue; }
+    uint64_t t = now_ns();
+    if (m.kind) { ++stopped; continue; }
+    if (m.seq != expect[m.producer]) ++errors;            // loss or reorder within a producer
+    expect[m.producer] = m.seq + 1;
+    lat.push_back(t > m.t_ns ? (uint32_t)(t - m.t_ns) : 0);  // cross-core TSC skew can be a few ns
