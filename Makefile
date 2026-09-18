@@ -27,3 +27,10 @@ test: build/test_queues
 bench: build/bench
 	./build/bench 1 500000 1000 0 && ./build/bench 3 300000 1500 0
 
+# Linux, root: AF_PACKET PACKET_MMAP demo on loopback
+rx: build/feed_rx
+	sudo ./build/feed_rx lo 15000 200000 2000
+
+clean:
+	rm -rf build
+.PHONY: all test bench rx clean
