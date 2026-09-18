@@ -51,3 +51,11 @@ Result run(unsigned P, size_t per, uint64_t gap, bool pin) {
     if (m.seq != expect[m.producer]) ++errors;            // loss or reorder within a producer
     expect[m.producer] = m.seq + 1;
     lat.push_back(t > m.t_ns ? (uint32_t)(t - m.t_ns) : 0);  // cross-core TSC skew can be a few ns
+  }
+  double dt = (double)(now_ns() - t0);
+  for (auto& t : th) t.join();
+  std::sort(lat.begin(), lat.end());
+  auto at = [&](double f) { return lat[std::min(lat.size() - 1, (size_t)(f * lat.size()))]; };
+  return {at(.5), at(.99), at(.999), lat.back(), lat.size(), errors, lat.size() / (dt / 1e3)};
+}
+
