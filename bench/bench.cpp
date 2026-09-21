@@ -59,3 +59,25 @@ Result run(unsigned P, size_t per, uint64_t gap, bool pin) {
   return {at(.5), at(.99), at(.999), lat.back(), lat.size(), errors, lat.size() / (dt / 1e3)};
 }
 
+static void show(const char* name, const Result& r) {
+  std::printf("%-26s p50=%6uns p99=%7uns p99.9=%8uns max=%9uns  recv=%llu errors=%llu\n", name, r.p50, r.p99,
+              r.p999, r.max, (unsigned long long)r.received, (unsigned long long)r.errors);
+}
+
+int main(int argc, char** argv) {
+  unsigned P = argc > 1 ? (unsigned)std::atoi(argv[1]) : 1;
+  size_t per = argc > 2 ? std::strtoull(argv[2], nullptr, 10) : 500000;
+  uint64_t gap = argc > 3 ? std::strtoull(argv[3], nullptr, 10) : 1000;
+  bool pin = argc > 4 && std::atoi(argv[4]);
+  (void)now_ns();  // calibrate before any timing
+  std::printf("producers=%u msgs/producer=%zu gap=%lluns pin=%d\n", P, per, (unsigned long long)gap, (int)pin);
+  show("v1 mutex + condvar", run<v1::Queue>(P, per, gap, pin));
+  if (P == 1) {
+    show("v2 SPSC (unpadded)", run<v2::Queue<>>(P, per, gap, pin));
+    show("v3 SPSC (cache-line pad)", run<v3::Queue<>>(P, per, gap, pin));
+  }
+  show("v4 ring per producer", run<v4::Queue<>>(P, per, gap, pin));
+#ifdef WITH_RT
+  show("v6 + huge pages/mlock", run<v6::Queue<>>(P, per, gap, pin));
+#endif
+}
