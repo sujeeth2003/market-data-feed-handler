@@ -46,3 +46,8 @@ Latency = consumer receive timestamp minus the producer's send timestamp, from a
 - **Not distinguishable here:** v2 vs v3 vs v4 vs v6 swap places between runs. On an unpinned laptop the OS scheduler dominates p99.9 (tens of microseconds) and hides the cache-line and paging effects those versions target. The false-sharing fix (v3) in particular needs pinned cores on separate physical cores plus `perf c2c` to show. That is a reason to run it on an isolated Linux machine, not a reason to claim a win now.
 - 3 producers oversubscribes this 4-core laptop (3 producers + consumer + OS), so its tail numbers are scheduling noise.
 
+## Design notes
+- `Msg` is 32 bytes, so two fit a cache line.
+- Rings are power-of-two sized; indices are monotonically increasing counters masked on access, so full/empty are unambiguous without wasting a slot.
+- v4 gives approximate cross-producer ordering (each ring is FIFO; the merge is by polling). Per-producer order and completeness are verified by sequence number.
+- The consumer busy-polls and burns a core by design. That is the trade for removing the futex.
