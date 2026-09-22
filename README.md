@@ -31,3 +31,18 @@ Latency = consumer receive timestamp minus the producer's send timestamp, from a
 | v5 `AF_PACKET` | **Compiles for Linux, never executed** (no Linux host here). Run `make rx` as root and treat results as unmeasured until you do |
 | `perf c2c`, `isolcpus` effects | **Not measured** (Windows dev box) |
 
+## Results (what I can honestly claim)
+11th-gen Core i5-1135G7 (4C/8T laptop), Windows 11, clang 21 `-O2`, 1 producer, 300k messages at 1 M msg/s, threads **not pinned**:
+
+| Version | p50 | p99 | p99.9 |
+|---|---|---|---|
+| v1 mutex + condvar | 271 ns | 10,652 ns | 83,520 ns |
+| v2 SPSC (unpadded) | 86 ns | 373 ns | 43,258 ns |
+| v3 SPSC (padded) | 90 ns | 1,774 ns | 52,435 ns |
+| v4 ring per producer | 102 ns | 179 ns | 18,688 ns |
+| v6 (huge pages unavailable here) | 103 ns | 163 ns | 10,843 ns |
+
+- **Robust:** v1 -> v2 cuts p99 by ~30x. That is the lock / futex removal and it reproduces every run.
+- **Not distinguishable here:** v2 vs v3 vs v4 vs v6 swap places between runs. On an unpinned laptop the OS scheduler dominates p99.9 (tens of microseconds) and hides the cache-line and paging effects those versions target. The false-sharing fix (v3) in particular needs pinned cores on separate physical cores plus `perf c2c` to show. That is a reason to run it on an isolated Linux machine, not a reason to claim a win now.
+- 3 producers oversubscribes this 4-core laptop (3 producers + consumer + OS), so its tail numbers are scheduling noise.
+
