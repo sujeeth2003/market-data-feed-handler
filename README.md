@@ -22,3 +22,12 @@ sh scripts/rt_setup.sh    # Linux: the boot/kernel settings v6 assumes (document
 ```
 Latency = consumer receive timestamp minus the producer's send timestamp, from a calibrated `rdtsc` clock.
 
+## What has and has not been verified
+| | Status |
+|---|---|
+| v1-v4 correctness (`make test`) | Passed on Windows 11 / clang 21 |
+| v1-v4 latency | Measured (below) |
+| v6 code path | Runs; on this machine it fell back to 4 KiB pages and no `mlock`, so **the huge-page effect was not measured** |
+| v5 `AF_PACKET` | **Compiles for Linux, never executed** (no Linux host here). Run `make rx` as root and treat results as unmeasured until you do |
+| `perf c2c`, `isolcpus` effects | **Not measured** (Windows dev box) |
+
