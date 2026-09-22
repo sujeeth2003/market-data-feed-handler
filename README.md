@@ -11,3 +11,14 @@ Getting market-data events from producer threads (and eventually from the networ
 | [v5_af_packet](v5_af_packet/feed_rx.cpp) | `AF_PACKET` + `PACKET_MMAP` (TPACKET_V2): read packets straight from a memory-mapped ring | No `recvfrom()` per packet, no copy, no special NIC (not full kernel bypass) |
 | [v6_realtime_tuning](v6_realtime_tuning/queue.hpp) | Core pinning, `isolcpus`, huge pages (`MAP_HUGETLB`), `mlock`, pre-touched memory | Page faults, TLB misses, scheduler and swap jitter |
 
+## Build, test, run
+```bash
+make test                 # every message exactly once, in order per producer (1 and 3 producers, backpressure case)
+make bench                # v1-v4: latency, 1 and 3 producers
+make build/bench_rt       # adds v6 (huge pages / mlock) to the comparison
+make rx                   # Linux + root: v5 AF_PACKET demo on loopback
+sh scripts/perf_c2c.sh    # Linux: false sharing evidence, v2 vs v3
+sh scripts/rt_setup.sh    # Linux: the boot/kernel settings v6 assumes (documentation)
+```
+Latency = consumer receive timestamp minus the producer's send timestamp, from a calibrated `rdtsc` clock.
+
